@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::fs;
 
-static EIGHT_BIT: usize = 1;
 static SIXTEEN_BIT: usize = 2;
 static THIRTY_TWO_BIT: usize = 4;
 static SIXTY_FOUR_BIT: usize = 8;
@@ -255,7 +254,7 @@ fn get_glyph_offsets(
     for i in 0..num_glyphs {
         if index_to_loc_format == 0 {
             let o = to_u16(bytes, loca_offset + ((i as usize) * SIXTEEN_BIT));
-            loca_offsets.push((o as u32 * 2) as usize);
+            loca_offsets.push(o as usize * 2);
         } else {
             let o = to_u32(bytes, loca_offset + ((i as usize) * THIRTY_TWO_BIT));
             loca_offsets.push(o as usize);
@@ -345,15 +344,33 @@ fn get_glyph_coordinates(bytes: &Vec<u8>, table_offsets: &HashMap<String, usize>
     let flags_offset = instructions_offset + (instruction_length as usize);
     let mut flags: Vec<u8> = vec![];
 
-    let num_points = end_pts_of_contours.last().copied().unwrap_or(0) + 1;
-    for i in 0..num_points {
-        flags.push(bytes[flags_offset + (i as usize)]);
+    let num_points: usize = (end_pts_of_contours.last().copied().unwrap_or(0) + 1) as usize;
+    let mut flags_length: usize = 0;
+
+    while flags.len() < num_points {
+        let flag = bytes[flags_offset + flags_length];
+        flags.push(flag);
+
+        if flag & (1 << 3) != 0 {
+
+            flags_length += 1;
+
+            let repeat = bytes[flags_offset + flags_length];
+
+            for _ in 0..repeat {
+                flags.push(flag);
+            }
+
+            flags_length += 1;
+        } else {
+            flags_length += 1;
+        }
     }
 
     let mut x_coordinates: Vec<i16> = vec![];
     let mut y_coordinates: Vec<i16> = vec![];
 
-    let mut coordinates_offset = flags_offset + (num_points as usize);
+    let mut coordinates_offset = flags_offset + (flags_length as usize);
     let mut prev_x = 0;
     for i in 0..num_points {
         let flag = flags[i as usize];
@@ -420,14 +437,17 @@ fn render_font(path: &str) {
     let num_glyphs = get_num_glyphs(&bytes, &table_offsets);
     let loca_offsets = get_glyph_offsets(&bytes, &table_offsets, num_glyphs);
 
-    let example = "B";
+    let example = "Hello World";
     let mut output = vec![];
 
     for e in example.chars() {
         let id = get_glyph_id(&bytes, &table_offsets, e);
         println!("{id}");
-        let coords = get_glyph_coordinates(&bytes, &table_offsets, loca_offsets[id as usize]);
-        output.push(coords);
+
+        if loca_offsets[id as usize] < loca_offsets[(id as usize) + 1] {
+            let coords = get_glyph_coordinates(&bytes, &table_offsets, loca_offsets[id as usize]);
+            output.push(coords);
+        }
     }
 
     for point in output {
@@ -449,5 +469,5 @@ fn main() {
     for node in output {
         println!("text: \"{}\",\nstyle: {{\n  color: {},\n  font_style: {:?},\n  font_weight: {:?},\n}}\n", node.text, node.style.color, node.style.font_style, node.style.font_weight);
     }
-    render_font("Roboto.ttf");
+    render_font("./fonts/Roboto.ttf");
 }
