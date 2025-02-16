@@ -5,7 +5,7 @@
  * 32-BIT = 4 BYTES
  */
 use std::collections::HashMap;
-use std::fs;
+use std::{fs, vec};
 
 static SIXTEEN_BIT: usize = 2;
 static THIRTY_TWO_BIT: usize = 4;
@@ -431,28 +431,36 @@ fn get_glyph_coordinates(bytes: &Vec<u8>, table_offsets: &HashMap<String, usize>
     return points;
 
 }
-fn render_font(path: &str) {
+
+fn unique_chars(text: &str) -> Vec<char> {
+    let mut chars: Vec<char> = text.chars().filter(|c| !c.is_whitespace()).collect();
+    chars.sort_unstable();
+    chars.dedup();
+    return chars;
+}
+
+fn render_font(text: &str, path: &str) -> HashMap<char, Vec<Point>> {
     let bytes = read_font_file(path);
     let table_offsets = parse_table_offsets(&bytes);
     let num_glyphs = get_num_glyphs(&bytes, &table_offsets);
     let loca_offsets = get_glyph_offsets(&bytes, &table_offsets, num_glyphs);
 
-    let example = "Hello World";
-    let mut output = vec![];
+    let mut glyphs: HashMap<char, Vec<Point>> = HashMap::new();
 
-    for e in example.chars() {
-        let id = get_glyph_id(&bytes, &table_offsets, e);
+    let chars = unique_chars(text);
+
+    for c in chars {
+        let id = get_glyph_id(&bytes, &table_offsets, c);
         println!("{id}");
 
         if loca_offsets[id as usize] < loca_offsets[(id as usize) + 1] {
             let coords = get_glyph_coordinates(&bytes, &table_offsets, loca_offsets[id as usize]);
-            output.push(coords);
+            glyphs.insert(c, coords);
         }
     }
 
-    for point in output {
-        println!("{:?}", point);
-    }
+    glyphs
+
 }
 fn main() {
     let text: &str = "resubbed for [b][color=#ff0000]10[/color] months[/b] at [b]Tier[color=#ff0000]3[/color]![/b]";
@@ -469,5 +477,5 @@ fn main() {
     for node in output {
         println!("text: \"{}\",\nstyle: {{\n  color: {},\n  font_style: {:?},\n  font_weight: {:?},\n}}\n", node.text, node.style.color, node.style.font_style, node.style.font_weight);
     }
-    render_font("./fonts/Roboto.ttf");
+    render_font("Hello World", "./fonts/Roboto.ttf");
 }
